@@ -36,38 +36,37 @@ const ClientPage = ({ topicName, initialData }: ClientPageProps) => {
 
   useEffect(() => {
     socket.on("room-update", (message: string) => {
+      console.log("room-update-called", message);
       const data = JSON.parse(message) as {
         text: string;
         value: number;
       }[];
 
-      data.map((newWord) => {
-        const isWordAlreadyIncluded = words.some(
-          (word) => word.text === newWord.text
-        );
+      setWords((prevWords) => {
+        return data.reduce((acc, newWord) => {
+          const existingWord = acc.find((word) => word.text === newWord.text);
 
-        if (isWordAlreadyIncluded) {
-          // increment
-          setWords((prev) => {
-            const before = prev.find((word) => word.text === newWord.text);
-            const rest = prev.filter((word) => word.text !== newWord.text);
+          if (existingWord) {
+            // Increment the value of the existing word
+            return acc.map((word) =>
+              word.text === newWord.text
+                ? { ...word, value: word.value + newWord.value }
+                : word
+            );
+          } else if (acc.length < 50) {
+            // Add the new word if the limit is not exceeded
+            return [...acc, newWord];
+          }
 
-            return [
-              ...rest,
-              { text: before!.text, value: before!.value + newWord.value },
-            ];
-          });
-        } else if (words.length < 50) {
-          // add to state
-          setWords((prev) => [...prev, newWord]);
-        }
+          return acc;
+        }, prevWords);
       });
     });
 
     return () => {
       socket.off("room-update");
     };
-  }, [words]);
+  }, [setWords]);
 
   const fontScale = scaleLog({
     domain: [

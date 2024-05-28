@@ -28,7 +28,7 @@ export default async function Home() {
                 </span>
                 nk
               </span>{" "}
-              about{<DotLoading></DotLoading>}
+              {/* about{<DotLoading></DotLoading>} */}
             </h1>
             <TopicCreator />
             <div className="mt-12 flex flex-col sm:flex-row items-center sm:items-start gap-5">
