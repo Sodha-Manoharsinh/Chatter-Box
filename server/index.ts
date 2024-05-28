@@ -14,7 +14,10 @@ const subRedis = new Redis(process.env.REDIS_CONNECTION_STRING);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "https://your-vercel-domain.vercel.app"],
+    origin: [
+      "http://localhost:3000",
+      "https://chatter-d9n9cgt6l-sodha-manoharsinhs-projects.vercel.app",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
   },
