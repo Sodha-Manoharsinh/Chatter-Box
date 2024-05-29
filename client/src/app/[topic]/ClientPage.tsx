@@ -26,47 +26,49 @@ interface ClientPageProps {
 
 const COLORS = ["#143059", "#2F6B9A", "#82a6c2"];
 
-const ClientPage = ({ topicName, initialData }: ClientPageProps) => {
-  const [words, setWords] = useState(initialData);
+const ClientPage: React.FC<ClientPageProps> = ({ topicName, initialData }) => {
+  const [words, setWords] = useState<WordData[]>(initialData);
   const [input, setInput] = useState<string>("");
+
+  console.log(initialData);
+  console.log(words);
 
   useEffect(() => {
     socket.emit("join-room", `room:${topicName}`);
   }, [topicName]);
 
   useEffect(() => {
-    socket.on("room-update", (message: string) => {
+    const handleRoomUpdate = (message: string) => {
       console.log("room-update-called", message);
-      const data = JSON.parse(message) as {
-        text: string;
-        value: number;
-      }[];
+      const data: WordData[] = JSON.parse(message);
 
       setWords((prevWords) => {
-        return data.reduce((acc, newWord) => {
-          const existingWord = acc.find((word) => word.text === newWord.text);
+        const updatedWords = prevWords.slice(); // Copy previous words
+
+        data.forEach((newWord) => {
+          const existingWord = updatedWords.find(
+            (word) => word.text === newWord.text
+          );
 
           if (existingWord) {
             // Increment the value of the existing word
-            return acc.map((word) =>
-              word.text === newWord.text
-                ? { ...word, value: word.value + newWord.value }
-                : word
-            );
-          } else if (acc.length < 50) {
+            existingWord.value += newWord.value;
+          } else if (updatedWords.length < 50) {
             // Add the new word if the limit is not exceeded
-            return [...acc, newWord];
+            updatedWords.push(newWord);
           }
+        });
 
-          return acc;
-        }, prevWords);
+        return updatedWords;
       });
-    });
+    };
+
+    socket.on("room-update", handleRoomUpdate);
 
     return () => {
-      socket.off("room-update");
+      socket.off("room-update", handleRoomUpdate);
     };
-  }, [setWords]);
+  }, [words, initialData]);
 
   const fontScale = scaleLog({
     domain: [
@@ -95,7 +97,7 @@ const ClientPage = ({ topicName, initialData }: ClientPageProps) => {
             words={words}
             width={500}
             height={500}
-            fontSize={(data: { value: number }) => fontScale(data.value)}
+            fontSize={(data: WordData) => fontScale(data.value)}
             font={"Impact"}
             padding={2}
             spiral="archimedean"

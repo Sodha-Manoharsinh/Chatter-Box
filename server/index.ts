@@ -8,16 +8,16 @@ import "dotenv/config";
 const app = express();
 app.use(cors());
 
+// console.log("URL:", process.env.UPSTASH_REDIS_REST_URL);
+// console.log("Token:", process.env.UPSTASH_REDIS_REST_TOKEN);
+
 const redis = new Redis(process.env.REDIS_CONNECTION_STRING);
 const subRedis = new Redis(process.env.REDIS_CONNECTION_STRING);
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:3000",
-      "https://chatter-d9n9cgt6l-sodha-manoharsinhs-projects.vercel.app",
-    ],
+    origin: ["http://localhost:3000"],
     methods: ["GET", "POST"],
     credentials: true,
   },
