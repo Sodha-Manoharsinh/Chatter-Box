@@ -12,7 +12,9 @@ import { useMutation } from "@tanstack/react-query";
 import { submitComment } from "../actions";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:8080");
+const socket = io(
+  "http://chatter-box-kbx3-bt086cm0i-sodha-manoharsinhs-projects.vercel.app"
+);
 
 interface WordData {
   text: string;
