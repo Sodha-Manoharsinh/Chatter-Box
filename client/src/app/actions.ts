@@ -40,18 +40,42 @@ export const submitComment = async ({
   comment: string;
   topicName: string;
 }) => {
-  const words = wordFreq(comment);
+  // Validate input
+  if (!comment || comment.trim().length === 0) {
+    return { error: "Comment cannot be empty" };
+  }
+  if (comment.length > 500) {
+    return { error: "Comment must be less than 500 characters" };
+  }
+  if (!topicName || typeof topicName !== "string" || topicName.length > 50) {
+    return { error: "Invalid topic name" };
+  }
 
-  await Promise.all(
-    words.map(async (word) => {
-      await redis.zadd(
-        `room:${topicName}`,
-        { incr: true },
-        { member: word.text, score: word.value }
-      );
-    })
-  );
-  await redis.incr("served-requests");
+  try {
+    // Verify topic exists
+    const topicExists = await redis.sismember("existing-topic", topicName);
+    if (!topicExists) {
+      return { error: "Topic does not exist" };
+    }
 
-  await redis.publish(`room:${topicName}`, words);
+    const words = wordFreq(comment);
+
+    await Promise.all(
+      words.map(async (word) => {
+        await redis.zadd(
+          `room:${topicName}`,
+          { incr: true },
+          { member: word.text, score: word.value }
+        );
+      })
+    );
+    await redis.incr("served-requests");
+
+    await redis.publish(`room:${topicName}`, JSON.stringify(words));
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error submitting comment:", error);
+    return { error: "Failed to submit comment" };
+  }
 };

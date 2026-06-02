@@ -8,10 +8,19 @@ import { createTopic } from "@/app/actions";
 
 const TopicCreator = () => {
   const [input, setInput] = useState<string>("");
+  const [error, setError] = useState<string>("");
 
-  const { mutate, error, isPending } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: createTopic,
+    onError: (error) => {
+      setError(error instanceof Error ? error.message : "Failed to create topic");
+    },
   });
+
+  const handleCreateTopic = () => {
+    setError("");
+    mutate({ topicName: input });
+  };
 
   return (
     <div className="mt-12 flex flex-col gap-2">
@@ -23,13 +32,13 @@ const TopicCreator = () => {
           onChange={({ target }) => setInput(target.value)}
         />
         <Button
-          disabled={isPending}
-          onClick={() => mutate({ topicName: input })}
+          disabled={isPending || !input.trim()}
+          onClick={handleCreateTopic}
         >
-          Create
+          {isPending ? "Creating..." : "Create"}
         </Button>
       </div>
-      {error ? <p className="text-sm text-red-600">{error?.message}</p> : null}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 };

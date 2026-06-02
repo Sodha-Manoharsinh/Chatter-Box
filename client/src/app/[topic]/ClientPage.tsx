@@ -1,7 +1,7 @@
 "use client";
 
 import MaxWidthWrapper from "@/components/MaxWidthWrapper";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Wordcloud } from "@visx/wordcloud";
 import { scaleLog } from "@visx/scale";
 import { Text } from "@visx/text";
@@ -10,11 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { submitComment } from "../actions";
-import { io } from "socket.io-client";
-
-const socket = io(
-  "http://chatter-box-kbx3-bt086cm0i-sodha-manoharsinhs-projects.vercel.app"
-);
+import { io, Socket } from "socket.io-client";
 
 interface WordData {
   text: string;
@@ -29,17 +25,38 @@ interface ClientPageProps {
 const COLORS = ["#143059", "#2F6B9A", "#82a6c2"];
 
 const ClientPage: React.FC<ClientPageProps> = ({ topicName, initialData }) => {
+  const socketRef = useRef<Socket | null>(null);
   const [words, setWords] = useState<WordData[]>(initialData);
   const [input, setInput] = useState<string>("");
+  const [submitError, setSubmitError] = useState<string>("");
+  const [socketError, setSocketError] = useState<string>("");
 
-  console.log(initialData);
-  console.log(words);
-
+  // Initialize socket connection
   useEffect(() => {
-    socket.emit("join-room", `room:${topicName}`);
+    socketRef.current = io(
+      process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"
+    );
+
+    socketRef.current.on("error", (errorData: { message: string }) => {
+      console.error("Socket error:", errorData);
+      setSocketError(errorData.message);
+    });
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, []);
+
+  // Join room when topic changes
+  useEffect(() => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("join-room", `room:${topicName}`);
   }, [topicName]);
 
+  // Listen for room updates
   useEffect(() => {
+    if (!socketRef.current) return;
+
     const handleRoomUpdate = (message: string) => {
       console.log("room-update-called", message);
       const data: WordData[] = JSON.parse(message);
@@ -65,23 +82,38 @@ const ClientPage: React.FC<ClientPageProps> = ({ topicName, initialData }) => {
       });
     };
 
-    socket.on("room-update", handleRoomUpdate);
+    socketRef.current.on("room-update", handleRoomUpdate);
 
     return () => {
-      socket.off("room-update", handleRoomUpdate);
+      socketRef.current?.off("room-update", handleRoomUpdate);
     };
-  }, [words, initialData]);
+  }, []);
 
-  const fontScale = scaleLog({
-    domain: [
-      Math.min(...words.map((w) => w.value)),
-      Math.max(...words.map((w) => w.value)),
-    ],
-    range: [10, 100],
-  });
+  const fontScale = useMemo(() => {
+    if (words.length === 0) {
+      return scaleLog({
+        domain: [1, 1],
+        range: [10, 100],
+      });
+    }
+    return scaleLog({
+      domain: [
+        Math.min(...words.map((w) => w.value)),
+        Math.max(...words.map((w) => w.value)),
+      ],
+      range: [10, 100],
+    });
+  }, [words]);
 
   const { mutate, isPending } = useMutation({
     mutationFn: submitComment,
+    onSuccess: () => {
+      setInput("");
+      setSubmitError("");
+    },
+    onError: (error) => {
+      setSubmitError("Failed to submit comment. Please try again.");
+    },
   });
 
   return (
@@ -94,34 +126,40 @@ const ClientPage: React.FC<ClientPageProps> = ({ topicName, initialData }) => {
 
         <p className="text-sm">(updated in real-time)</p>
 
-        <div className="aspect-square max-w-xl flex items-center justify-center">
-          <Wordcloud<WordData>
-            words={words}
-            width={500}
-            height={500}
-            fontSize={(data: WordData) => fontScale(data.value)}
-            font={"Impact"}
-            padding={2}
-            spiral="archimedean"
-            rotate={0}
-            random={() => 0.5}
-          >
-            {(cloudWords: any[]) =>
-              cloudWords.map((w, i) => (
-                <Text
-                  key={w.text}
-                  fill={COLORS[i % COLORS.length]}
-                  textAnchor="middle"
-                  transform={`translate(${w.x}, ${w.y})`}
-                  fontSize={w.size}
-                  fontFamily={w.font}
-                >
-                  {w.text}
-                </Text>
-              ))
-            }
-          </Wordcloud>
-        </div>
+        {words.length > 0 ? (
+          <div className="aspect-square max-w-xl flex items-center justify-center">
+            <Wordcloud<WordData>
+              words={words}
+              width={500}
+              height={500}
+              fontSize={(data: WordData) => fontScale(data.value)}
+              font={"Impact"}
+              padding={2}
+              spiral="archimedean"
+              rotate={0}
+              random={() => 0.5}
+            >
+              {(cloudWords: any[]) =>
+                cloudWords.map((w, i) => (
+                  <Text
+                    key={w.text}
+                    fill={COLORS[i % COLORS.length]}
+                    textAnchor="middle"
+                    transform={`translate(${w.x}, ${w.y})`}
+                    fontSize={w.size}
+                    fontFamily={w.font}
+                  >
+                    {w.text}
+                  </Text>
+                ))
+              }
+            </Wordcloud>
+          </div>
+        ) : (
+          <div className="aspect-square max-w-xl flex items-center justify-center text-gray-500">
+            <p>No words yet. Be the first to share your thoughts!</p>
+          </div>
+        )}
 
         <div className="max-w-lg w-full">
           <Label className="font-semibold tracking-tight text-lg pb-2">
@@ -134,12 +172,18 @@ const ClientPage: React.FC<ClientPageProps> = ({ topicName, initialData }) => {
               placeholder={`${topicName} is absolutely...`}
             />
             <Button
-              disabled={isPending}
+              disabled={isPending || !input.trim()}
               onClick={() => mutate({ comment: input, topicName })}
             >
-              Share
+              {isPending ? "Sharing..." : "Share"}
             </Button>
           </div>
+          {submitError && (
+            <p className="text-sm text-red-600 mt-2">{submitError}</p>
+          )}
+          {socketError && (
+            <p className="text-sm text-orange-600 mt-2">Connection: {socketError}</p>
+          )}
         </div>
       </MaxWidthWrapper>
     </div>
